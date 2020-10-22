@@ -85,65 +85,90 @@ router.post('/', async function ({ body }, res, next) {
 
 /* OIDC callback */
 router.get('/callback', async function ({ query }, res, next) {
-  const code = query.code;
-  const basicAuthHeader = Buffer.from(`${settings.clientId}:${settings.clientSecret}`).toString('base64');
+  if (query.error) {
+    const description = query.error_description;
+    return res.render('error', {
+      error: description
+    });
+  }
 
-  const token = (await axios.post(metaData.token_endpoint, qs.stringify({
-    grant_type: 'authorization_code',
-    redirect_uri: settings.callbackUrl,
-    code,
-    scope: settings.scopes
-  }), {
-    headers: {
-      'Accept': 'application/json',
-      'Authorization': `Basic ${basicAuthHeader}`,
-      'Content-Type': 'application/x-www-form-urlencoded'
+  try {
+    const code = query.code;
+    const basicAuthHeader = Buffer.from(`${settings.clientId}:${settings.clientSecret}`).toString('base64');
+
+    const token = (await axios.post(metaData.token_endpoint, qs.stringify({
+      grant_type: 'authorization_code',
+      redirect_uri: settings.callbackUrl,
+      code,
+      scope: settings.scopes
+    }), {
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Basic ${basicAuthHeader}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    })).data;
+
+    updateTokenInfo(token);
+
+    const organizationAccessUrl = await needsOrganizationAccess();
+
+    if (organizationAccessUrl) {
+      res.redirect(organizationAccessUrl);
+    } else {
+      res.render('index', settings);
     }
-  })).data;
-
-  updateTokenInfo(token);
-
-  const organizationAccessUrl = await needsOrganizationAccess();
-
-  if (organizationAccessUrl) {
-    res.redirect(organizationAccessUrl);
-  } else {
-    res.render('index', settings);
+  } catch (e) {
+    return res.render('error', {
+      error: e
+    });
   }
 });
 
 router.get('/refresh-access-token', async function (req, res, next) {
-  const basicAuthHeader = Buffer.from(`${settings.clientId}:${settings.clientSecret}`).toString('base64');
+  try {
+    const basicAuthHeader = Buffer.from(`${settings.clientId}:${settings.clientSecret}`).toString('base64');
 
-  const token = (await axios.post(metaData.token_endpoint, qs.stringify({
-    grant_type: 'refresh_token',
-    redirect_uri: settings.callbackUrl,
-    refresh_token: settings.refreshToken,
-    scope: settings.scopes
-  }), {
-    headers: {
-      'Accept': 'application/json',
-      'Authorization': `Basic ${basicAuthHeader}`,
-      'Content-Type': 'application/x-www-form-urlencoded'
-    }
-  })).data;
+    const token = (await axios.post(metaData.token_endpoint, qs.stringify({
+      grant_type: 'refresh_token',
+      redirect_uri: settings.callbackUrl,
+      refresh_token: settings.refreshToken,
+      scope: settings.scopes
+    }), {
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `Basic ${basicAuthHeader}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    })).data;
 
-  updateTokenInfo(token);
-  res.render('index', settings);
+    updateTokenInfo(token);
+    res.render('index', settings);
+  } catch (e) {
+    return res.render('error', {
+      error: e
+    });
+  }
 });
 
 router.post('/call-api', async function ({ body }, res, next) {
-  const response = (await axios.get(body.url, {
-    headers: {
-      'Authorization': `Bearer ${settings.accessToken}`,
-      'Accept': 'application/vnd.deere.axiom.v3+json'
-    }
-  })).data;
+  try {
+    const response = (await axios.get(body.url, {
+      headers: {
+        'Authorization': `Bearer ${settings.accessToken}`,
+        'Accept': 'application/vnd.deere.axiom.v3+json'
+      }
+    })).data;
 
-  res.render('index', {
-    ...settings,
-    apiResponse: JSON.stringify(response, null, 2)
-  });
+    res.render('index', {
+      ...settings,
+      apiResponse: JSON.stringify(response, null, 2)
+    });
+  } catch (e) {
+    return res.render('error', {
+      error: e
+    });
+  }
 });
 
 module.exports = router;

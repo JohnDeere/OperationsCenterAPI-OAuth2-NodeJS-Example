@@ -44,7 +44,7 @@ router.post('/', async function ({ body }, res, next) {
 });
 
 /* OIDC callback */
-router.get('/callback', async function ({ body, query }, res, next) {
+router.get('/callback', async function ({ query }, res, next) {
   const code = query.code;
   const basicAuthHeader = Buffer.from(`${settings.clientId}:${settings.clientSecret}`).toString('base64');
 
@@ -52,6 +52,26 @@ router.get('/callback', async function ({ body, query }, res, next) {
     grant_type: 'authorization_code',
     redirect_uri: settings.callbackUrl,
     code,
+    scope: settings.scopes
+  }), {
+    headers: {
+      'Accept': 'application/json',
+      'Authorization': `Basic ${basicAuthHeader}`,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    }
+  })).data;
+
+  updateTokenInfo(token);
+  res.render('index', settings);
+});
+
+router.get('/refresh-access-token', async function (req, res, next) {
+  const basicAuthHeader = Buffer.from(`${settings.clientId}:${settings.clientSecret}`).toString('base64');
+
+  const token = (await axios.post(metaData.token_endpoint, qs.stringify({
+    grant_type: 'refresh_token',
+    redirect_uri: settings.callbackUrl,
+    refresh_token: settings.refreshToken,
     scope: settings.scopes
   }), {
     headers: {

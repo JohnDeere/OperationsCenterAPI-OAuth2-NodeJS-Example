@@ -16,6 +16,7 @@ const populateSettings = (reqBody) => {
     state: reqBody.state
   };
 };
+
 const updateTokenInfo = (token) => {
   settings = {
     ...settings,
@@ -28,8 +29,6 @@ const updateTokenInfo = (token) => {
 
 /* Initializes OIDC login */
 router.post('/', async function ({ body }, res, next) {
-  console.log('Beginning OIDC...');
-
   populateSettings(body);
 
   metaData = (await axios.get(body.wellKnown)).data;
@@ -64,6 +63,20 @@ router.get('/callback', async function ({ body, query }, res, next) {
 
   updateTokenInfo(token);
   res.render('index', settings);
+});
+
+router.post('/call-api', async function ({ body }, res, next) {
+  const response = (await axios.get(body.url, {
+    headers: {
+      'Authorization': `Bearer ${settings.accessToken}`,
+      'Accept': 'application/vnd.deere.axiom.v3+json'
+    }
+  })).data;
+
+  res.render('index', {
+    ...settings,
+    apiResponse: JSON.stringify(response, null, 2)
+  });
 });
 
 module.exports = router;
